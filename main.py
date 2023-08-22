@@ -16,13 +16,17 @@ mongo = PyMongo(app, ssl_cert_reqs=ssl.CERT_NONE)
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization').split()[1]
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'message': 'Token is missing'}), 401
         try:
-            jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        except:
-            return jsonify({'message': 'Token is invalid!'}), 401
+            jwt_payload = jwt.decode(token.split()[1], app.config['SECRET_KEY'], algorithms=['HS256'])
+            kwargs['user_email'] = jwt_payload['email']
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'message': 'Token is invalid'}), 401
         return f(*args, **kwargs)
-
     return decorated
 
 
@@ -63,46 +67,59 @@ def login():
 
 @app.route('/template', methods=['POST'])
 @token_required
-def create_template():
+def create_template(user_email):
     data = request.get_json()
+    data['user_email'] = user_email
     inserted_template = mongo.db.templates.insert_one(data)
     inserted_id = str(inserted_template.inserted_id)
-    return jsonify({'message': 'Template created successfully', 'template_id': inserted_id}), 201
+    return jsonify({'template_id': inserted_id, 'message': 'Template created successfully'}), 201
 
 
 @app.route('/template', methods=['GET'])
 @token_required
-def get_all_templates():
-    templates = list(mongo.db.templates.find({}, {'_id': 0}))
-    return jsonify(templates), 200
+def get_all_templates(user_email):
+    templates = list(mongo.db.templates.find({'user_email': user_email}, {'_id': 1}))
+    formatted_templates = [{'_id': str(template['_id'])} for template in templates]
+    result = []
+    for template in formatted_templates:
+        template_id = template['_id']
+        template_data = mongo.db.templates.find_one({'_id': ObjectId(template_id), 'user_email': user_email}, {'_id': 0})
+        if template_data:
+            template_data['_id'] = template_id
+            result.append(template_data)
+    return jsonify(result), 200
 
 
 @app.route('/template/<template_id>', methods=['GET'])
 @token_required
-def get_template(template_id):
-    template = mongo.db.templates.find_one({'_id': ObjectId(template_id)}, {'_id': 0})
+def get_template(user_email, template_id):
+    template = mongo.db.templates.find_one({'_id': ObjectId(template_id), 'user_email': user_email}, {'_id': 0})
     if template:
-        return jsonify(template), 200
+        return jsonify({'template_id': template_id, "template": template}), 200
     else:
-        return jsonify({'message': 'Template not found'}), 404
+        return jsonify({'template_id': template_id, 'message': 'Template not found'}), 404
 
 
 @app.route('/template/<template_id>', methods=['PUT'])
 @token_required
-def update_template(template_id):
+def update_template(user_email, template_id):
     data = request.get_json()
-    mongo.db.templates.update_one({'_id': ObjectId(template_id)}, {'$set': data})
-    return jsonify({'message': 'Template updated successfully'}), 200
+    result = mongo.db.templates.update_one({'_id': ObjectId(template_id), 'user_email': user_email}, {'$set': data})
+    print(result)
+    if result.modified_count > 0:
+        return jsonify({'template_id': template_id, 'message': 'Template updated successfully'}), 200
+    else:
+        return jsonify({'template_id': template_id, 'message': 'Template not found'}), 404
 
 
 @app.route('/template/<template_id>', methods=['DELETE'])
 @token_required
-def delete_template(template_id):
-    result = mongo.db.templates.delete_one({'_id': ObjectId(template_id)})
+def delete_template(user_email, template_id):
+    result = mongo.db.templates.delete_one({'_id': ObjectId(template_id), 'user_email': user_email})
     if result.deleted_count > 0:
-        return jsonify({'message': 'Template deleted successfully'}), 200
+        return jsonify({'template_id': template_id, 'message': 'Template deleted successfully'}), 200
     else:
-        return jsonify({'message': 'Template not found'}), 404
+        return jsonify({'template_id': template_id, 'message': 'Template not found'}), 404
 
 
 if __name__ == '__main__':
