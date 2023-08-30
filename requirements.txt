@@ -4,3 +4,8 @@ PyJWT==2.1.0
 pymongo==3.12.0
 bcrypt==3.2.0
 pymongo[srv]
+pip~=23.2.1
+wheel~=0.41.1
+Jinja2~=3.1.2
+setuptools~=68.0.0
+python-dotenv~=1.0.0
