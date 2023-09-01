@@ -104,7 +104,10 @@ class TemplateManagement:
     @staticmethod
     @app.route('/template/<template_id>', methods=['GET'])
     @token_required
-    def get_template(user_id, template_id):
+    def get_template(template_id):
+        user_id = \
+        jwt.decode(request.headers.get('Authorization').split()[1], app.config['SECRET_KEY'], algorithms=['HS256'])[
+            'user_id']
         template = mongo.db.templates.find_one({'_id': ObjectId(template_id), 'user_id': user_id}, {'_id': 0})
         if template:
             return jsonify({'template_id': template_id, "template": template}), 200
@@ -114,7 +117,10 @@ class TemplateManagement:
     @staticmethod
     @app.route('/template/<template_id>', methods=['PUT'])
     @token_required
-    def update_template(user_id, template_id):
+    def update_template(template_id):
+        user_id = \
+        jwt.decode(request.headers.get('Authorization').split()[1], app.config['SECRET_KEY'], algorithms=['HS256'])[
+            'user_id']
         data = request.get_json()
         result = mongo.db.templates.update_one({'_id': ObjectId(template_id), 'user_id': user_id}, {'$set': data})
         print(result)
@@ -126,7 +132,10 @@ class TemplateManagement:
     @staticmethod
     @app.route('/template/<template_id>', methods=['DELETE'])
     @token_required
-    def delete_template(user_id, template_id):
+    def delete_template(template_id):
+        user_id = \
+        jwt.decode(request.headers.get('Authorization').split()[1], app.config['SECRET_KEY'], algorithms=['HS256'])[
+            'user_id']
         result = mongo.db.templates.delete_one({'_id': ObjectId(template_id), 'user_id': user_id})
         if result.deleted_count > 0:
             return jsonify({'template_id': template_id, 'message': 'Template deleted successfully'}), 200
